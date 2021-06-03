@@ -5,7 +5,7 @@
 #define PIN_LED 13
 #define PIN_WAVEFORM A5
 
-#define WINDOW_COUNT 600
+#define WINDOW_COUNT 550
 // Note: A rule of thumb for below is:
 //          1 + (WINDOW_COUNT * SAMPLE_SPACING_US microseconds * 60Hz * 2)
 #define MAX_INTERVALS 20
@@ -14,7 +14,8 @@
 
 int window[WINDOW_COUNT];
 
-struct interval {
+struct interval
+{
     int start;
     int end;
 
@@ -24,7 +25,8 @@ struct interval {
 int interval_count = 0;
 struct interval intervals[MAX_INTERVALS];
 
-void fail(const char *reason) {
+void fail(const char *reason)
+{
     Serial.println(reason);
 
     // Hard rest after 250ms.
@@ -33,75 +35,93 @@ void fail(const char *reason) {
         ;
 }
 
-int inline __attribute__((always_inline)) read_waveform() {
+int inline __attribute__((always_inline)) read_waveform()
+{
     return analogRead(PIN_WAVEFORM);
 }
 
 #define NULL_SENSE_THRESHOLD 10
 #define NULL_SHUTDOWN_COUNT 10
 
-void inline __attribute__((always_inline)) hold_until_nonnull(unsigned long neccesary_duration_millis) {
+void inline __attribute__((always_inline)) hold_until_nonnull(unsigned long neccesary_duration_millis)
+{
     Serial.println("HOLD START");
 
 hold_until_nonnull_retry:
     unsigned long capture_start_millis = millis();
 
     int null_contiguous = 0;
-    while (millis() - capture_start_millis < neccesary_duration_millis) {
-        if (read_waveform() < NULL_SENSE_THRESHOLD) {
+    while (millis() - capture_start_millis < neccesary_duration_millis)
+    {
+        if (read_waveform() < NULL_SENSE_THRESHOLD)
+        {
             null_contiguous++;
 
-            if (null_contiguous > NULL_SHUTDOWN_COUNT) {
+            if (null_contiguous > NULL_SHUTDOWN_COUNT)
+            {
                 Serial.println("HOLD RETRY");
                 goto hold_until_nonnull_retry;
             }
-        } else {
+        }
+        else
+        {
             null_contiguous = 0;
         }
     }
 }
 
-void inline __attribute__((always_inline)) trigger() {
+void inline __attribute__((always_inline)) trigger()
+{
+    // FIXME FIXME FIXME
     digitalWrite(PIN_SSR, true);
     digitalWrite(PIN_LED, true);
 
     Serial.println("TRIGGER");
 
     int null_contiguous = 0;
-    while (1) {
-        if (read_waveform() < NULL_SENSE_THRESHOLD) {
+    while (1)
+    {
+        if (read_waveform() < NULL_SENSE_THRESHOLD)
+        {
             null_contiguous++;
 
-            if (null_contiguous > NULL_SHUTDOWN_COUNT) {
+            if (null_contiguous > NULL_SHUTDOWN_COUNT)
+            {
                 digitalWrite(PIN_SSR, false);
                 digitalWrite(PIN_LED, false);
 
                 fail("SHUTDOWN");
             }
-        } else {
+        }
+        else
+        {
             null_contiguous = 0;
         }
     }
 }
 
-#define MOMENTARY_TRIGGER_DURATION_US 100
+#define MOMENTARY_TRIGGER_DURATION_US 500
 
-void inline __attribute__((always_inline)) triggerMomentary() {
+void inline __attribute__((always_inline)) triggerMomentary()
+{
     digitalWrite(PIN_SSR, true);
-    delayMicroseconds(100);
+    delayMicroseconds(MOMENTARY_TRIGGER_DURATION_US);
     digitalWrite(PIN_SSR, false);
 }
 
 #define MIN_BUFFER_US 5
 
-double capture_window() {
+double capture_window()
+{
     long capture_start_time = micros();
 
     long next_capture = capture_start_time + SAMPLE_SPACING_US;
-    for (int i = 0; i < WINDOW_COUNT; i++) {
+    for (int i = 0; i < WINDOW_COUNT; i++)
+    {
         long now = micros();
         // Note: This is robust to `micros()` overflow.
-        if (next_capture - now < MIN_BUFFER_US) {
+        if (next_capture - now < MIN_BUFFER_US)
+        {
             Serial.println(i);
             Serial.println(next_capture - now);
             Serial.println(MIN_BUFFER_US);
@@ -122,8 +142,10 @@ double capture_window() {
 #define PEAK_SAMPLES 20
 #define UNACCEPTABLE_JUMP_THRESHOLD 25
 
-int calc_peak_amplitude() {
-    if (WINDOW_COUNT < PEAK_SAMPLES) {
+int calc_peak_amplitude()
+{
+    if (WINDOW_COUNT < PEAK_SAMPLES)
+    {
         fail("window too small for peak samples");
     }
 
@@ -138,30 +160,38 @@ int calc_peak_amplitude() {
     int seen[PEAK_SAMPLES];
     int sum = 0;
     int last_greatest = -1;
-    for (int i = 0; i < PEAK_SAMPLES; i++) {
+    for (int i = 0; i < PEAK_SAMPLES; i++)
+    {
         int greatest = -1;
         int greatest_idx = 0;
-        for (int j = 0; j < WINDOW_COUNT; j++) {
+        for (int j = 0; j < WINDOW_COUNT; j++)
+        {
             bool seen_already = false;
-            for (int k = 0; k < i; k++) {
-                if (seen[k] == j) {
+            for (int k = 0; k < i; k++)
+            {
+                if (seen[k] == j)
+                {
                     seen_already = true;
                     break;
                 }
             }
 
-            if (seen_already) {
+            if (seen_already)
+            {
                 continue;
             }
 
-            if (window[j] > greatest) {
+            if (window[j] > greatest)
+            {
                 greatest = window[j];
                 greatest_idx = j;
             }
         }
 
-        if (last_greatest >= 0) {
-            if (last_greatest - greatest > UNACCEPTABLE_JUMP_THRESHOLD) {
+        if (last_greatest >= 0)
+        {
+            if (last_greatest - greatest > UNACCEPTABLE_JUMP_THRESHOLD)
+            {
                 Serial.println(last_greatest);
                 Serial.println(greatest);
                 Serial.println(UNACCEPTABLE_JUMP_THRESHOLD);
@@ -183,10 +213,18 @@ int calc_peak_amplitude() {
 #define PEAK_MIN 200
 #define PEAK_MAX 1024
 
-void validate_peak_amplitude(int peak) {
-    if (peak < PEAK_MIN || peak == PEAK_MAX) {
+void validate_peak_amplitude(int peak)
+{
+    if (peak < PEAK_MIN)
+    {
         Serial.println(peak);
-        fail("peak amplitude out of bounds");
+        fail("peak amplitude lo");
+    }
+
+    if (peak >= PEAK_MAX)
+    {
+        Serial.println(peak);
+        fail("peak amplitude hi");
     }
 }
 
@@ -194,25 +232,31 @@ void validate_peak_amplitude(int peak) {
 #define INTERVAL_THRESHOLD_DIVISOR 20
 #define MIN_INTERVALS 8
 
-int find_peak_threshold_and_intervals(int peak) {
+int find_peak_threshold_and_intervals(int peak)
+{
     int threshold = peak - (peak / INTERVAL_THRESHOLD_DIVISOR);
 
     int interval_start = -1;
-    for (int i = 0; i < WINDOW_COUNT; i++) {
-        if (interval_start < 0 && threshold <= window[i]) {
+    for (int i = 0; i < WINDOW_COUNT; i++)
+    {
+        if (interval_start < 0 && threshold <= window[i])
+        {
             interval_start = i;
         }
 
         // Note: We don't attempt to handle a noisy measurement here.
-        if (interval_start >= 0 && threshold > window[i]) {
-            if (interval_count == MAX_INTERVALS) {
+        if (interval_start >= 0 && threshold > window[i])
+        {
+            if (interval_count == MAX_INTERVALS)
+            {
                 fail("interval count overflow");
             }
 
             // Note: We intentionally skip intervals which started at the very beginning of our sample,
             // since we cannot be sure when they actually started in time. Moreover, we don't record
             // a final interval if one is currently matched at the time we run out of samples.
-            if (interval_start >= INTERVAL_START_MIN_IDX) {
+            if (interval_start >= INTERVAL_START_MIN_IDX)
+            {
                 intervals[interval_count].start = interval_start;
                 intervals[interval_count].end = i;
                 intervals[interval_count].center = (i + interval_start) / 2;
@@ -227,12 +271,14 @@ int find_peak_threshold_and_intervals(int peak) {
     // Note: We forget the last interval if it has been truncated, since failure
     // to do this will mess up interval width/center hence period calculations.
 
-    for (int i = interval_count; i < MAX_INTERVALS; i++) {
+    for (int i = interval_count; i < MAX_INTERVALS; i++)
+    {
         intervals[i].start = -1;
         intervals[i].end = -1;
     }
 
-    if (interval_count < MIN_INTERVALS) {
+    if (interval_count < MIN_INTERVALS)
+    {
         Serial.println(interval_count);
         fail("not enough intervals");
     }
@@ -240,20 +286,23 @@ int find_peak_threshold_and_intervals(int peak) {
     return threshold;
 }
 
-void calc_mean_interval_width_and_period(double *mean_width, double *mean_period) {
+void calc_mean_interval_width_and_period(double *mean_width, double *mean_period)
+{
     int sum;
 
     sum = 0;
-    for (int i = 0; i < interval_count; i++) {
+    for (int i = 0; i < interval_count; i++)
+    {
         sum += intervals[i].end - intervals[i].start;
     }
-    *mean_width = ((double) sum) / ((double) interval_count);
+    *mean_width = ((double)sum) / ((double)interval_count);
 
     sum = 0;
-    for (int i = 0; i < interval_count - 1; i++) {
+    for (int i = 0; i < interval_count - 1; i++)
+    {
         sum += intervals[i + 1].center - intervals[i].center;
     }
-    *mean_period = ((double) sum) / ((double) (interval_count - 1));
+    *mean_period = ((double)sum) / ((double)(interval_count - 1));
 }
 
 // FIXME calibrate for 115V
@@ -268,78 +317,145 @@ void calc_mean_interval_width_and_period(double *mean_width, double *mean_period
 // 12ms =  90Hz
 #define PERIOD_MAX_US 12000
 
-void validate_interval_width_and_period(double intwidth_samples, double intwidth_us, double period_us) {
-    if (intwidth_us < ((double) INTWIDTH_MIN_US) || intwidth_us > ((double) INTWIDTH_MAX_US)) {
+void validate_interval_width_and_period(double intwidth_samples, double intwidth_us, double period_us)
+{
+    if (intwidth_us < ((double)INTWIDTH_MIN_US) || intwidth_us > ((double)INTWIDTH_MAX_US))
+    {
         Serial.println(intwidth_us);
         fail("intwidth out of bounds");
     }
 
-    for (int i = 0; i < interval_count; i++) {
-        if (abs(intwidth_samples - ((double) (intervals[i].end - intervals[i].start))) > INTWIDTH_MAX_SAMPLE_DEV) {
+    for (int i = 0; i < interval_count; i++)
+    {
+        if (abs(intwidth_samples - ((double)(intervals[i].end - intervals[i].start))) > INTWIDTH_MAX_SAMPLE_DEV)
+        {
             Serial.println(intwidth_samples);
             Serial.println(intervals[i].start);
             Serial.println(intervals[i].end);
-            Serial.println(abs(intwidth_samples - ((double) (intervals[i].end - intervals[i].start))));
+            Serial.println(abs(intwidth_samples - ((double)(intervals[i].end - intervals[i].start))));
             fail("interval deviation exceeded");
         }
     }
 
-    if (period_us < ((double) PERIOD_MIN_US) || period_us > ((double) PERIOD_MAX_US)) {
+    if (period_us < ((double)PERIOD_MIN_US) || period_us > ((double)PERIOD_MAX_US))
+    {
         Serial.println(period_us);
         fail("period out of bounds");
     }
 }
 
 #define PHASE_DELAY_MULTIPLIER 0.136
-#define SOFTSTART_STANDOFF_US 500
 
-void synchronize_to_peak_and_trigger(int threshold, double us_per_sample, double intwidth_us, double period_us) {
+#define ACTIVATE_THRESHOLD_MULTIPLE 0.5
+#define SOFTSTART_REP_COUNT 150
+#define SOFTSTART_FINAL_DELAY 1200
+
+// FIXME remove???
+// #define SOFTSTART_STANDOFF_US 1900
+
+void synchronize_to_peak_and_trigger(int peak, int peak_threshold, double us_per_sample, double intwidth_us, double period_us)
+{
+    int activate_threshold = ((double)peak) * ((double)ACTIVATE_THRESHOLD_MULTIPLE);
+
+    Serial.print("activate_thresh=");
+    Serial.print(activate_threshold);
+    Serial.print(" peak_thresh=");
+    Serial.print(peak_threshold);
+    Serial.println();
+
+    if (activate_threshold > peak_threshold)
+    {
+        fail("activate > peak thresh");
+    }
+
     // Precompute neccesary final delay
-    int needed_final_delay = ((int) ((intwidth_us / 2.) + (((double) PHASE_DELAY_MULTIPLIER) * period_us) + (((double) PHASE_DELAY_MULTIPLIER) * period_us) + (period_us / 2.))) - SOFTSTART_STANDOFF_US;
+    // int needed_final_delay = ((int)((intwidth_us / 2.) + (((double)PHASE_DELAY_MULTIPLIER) * period_us) + (((double)PHASE_DELAY_MULTIPLIER) * period_us)));
+    // needed_final_delay += ((int)(period_us / 4.)) - SOFTSTART_STANDOFF_US;
 
-    int taken = 0;
+    for (int reps = 0; reps < SOFTSTART_REP_COUNT; reps++)
+    {
+        int taken = 0;
 
-    // Wait until we first enter the peak thresh...
-    while (read_waveform() < threshold && taken < WINDOW_COUNT) {
-        taken++;
+        // Wait until we first enter the peak thresh...
+        while (read_waveform() < peak_threshold && taken < WINDOW_COUNT)
+        {
+            taken++;
+        }
+
+        if (((double)taken) * us_per_sample > 2 * period_us)
+        {
+            Serial.println(((double)taken) * us_per_sample);
+            Serial.println(period_us);
+            fail("sync1: taken too long");
+        }
+
+        taken = 0;
+        while (read_waveform() >= peak_threshold && taken < WINDOW_COUNT)
+        {
+            taken++;
+        }
+
+        if (((double)taken) * us_per_sample > 2 * period_us)
+        {
+            Serial.println(((double)taken) * us_per_sample);
+            Serial.println(period_us);
+            fail("sync2: taken too long");
+        }
+
+        taken = 0;
+        while (read_waveform() < peak_threshold && taken < WINDOW_COUNT)
+        {
+            taken++;
+        }
+
+        if (((double)taken) * us_per_sample > 2 * period_us)
+        {
+            Serial.println(((double)taken) * us_per_sample);
+            Serial.println(period_us);
+            fail("sync3: taken too long");
+        }
+
+        taken = 0;
+        while (read_waveform() >= peak_threshold && taken < WINDOW_COUNT)
+        {
+            taken++;
+        }
+
+        if (((double)taken) * us_per_sample > 2 * period_us)
+        {
+            Serial.println(((double)taken) * us_per_sample);
+            Serial.println(period_us);
+            fail("sync4: taken too long");
+        }
+
+        taken = 0;
+        while (read_waveform() > activate_threshold && taken < WINDOW_COUNT)
+        {
+            taken++;
+        }
+
+        if (((double)taken) * us_per_sample > 2 * period_us)
+        {
+            Serial.println(((double)taken) * us_per_sample);
+            Serial.println(period_us);
+            fail("sync5: taken too long");
+        }
+
+        // delayMicroseconds(needed_final_delay);
+        delayMicroseconds(SOFTSTART_FINAL_DELAY);
+        triggerMomentary();
     }
 
-    if (((double) taken) * us_per_sample > 2 * period_us) {
-        Serial.println(((double) taken) * us_per_sample);
-        Serial.println(period_us);
-        fail("sync1: taken too long");
-    }
+    trigger();
 
-    taken = 0;
-    while (read_waveform() >= threshold && taken < WINDOW_COUNT) {
-        taken++;
-    }
-
-    if (((double) taken) * us_per_sample > 2 * period_us) {
-        Serial.println(((double) taken) * us_per_sample);
-        Serial.println(period_us);
-        fail("sync2: taken too long");
-    }
-
-    taken = 0;
-    while (read_waveform() < threshold && taken < WINDOW_COUNT) {
-        taken++;
-    }
-
-    if (((double) taken) * us_per_sample > 2 * period_us) {
-        Serial.println(((double) taken) * us_per_sample);
-        Serial.println(period_us);
-        fail("sync3: taken too long");
-    }
-
-    delayMicroseconds(needed_final_delay);
-    triggerMomentary();
+    Serial.println("DONE, HANG");
 
     while (1)
         ;
 }
 
-void setup() {
+void setup()
+{
     // DEBUG
     Serial.begin(9600);
 
@@ -357,7 +473,8 @@ void setup() {
 
 // #define HOLD_OFF_SECONDS 5
 
-void loop() {
+void loop()
+{
     // // `HOLD_OFF_SECONDS` second hold off, during which AC must be present
     // hold_until_nonnull(HOLD_OFF_SECONDS * 1000);
 
@@ -389,16 +506,16 @@ void loop() {
     Serial.print("width: ");
     Serial.print(mean_width);
     Serial.print(" - ");
-    Serial.print((int) intwidth_us);
+    Serial.print((int)intwidth_us);
     Serial.println();
     Serial.print("period: ");
     Serial.print(mean_period);
     Serial.print(" - ");
-    Serial.print((int) period_us);
+    Serial.print((int)period_us);
     Serial.println();
 
     validate_interval_width_and_period(mean_width, intwidth_us, period_us);
-    synchronize_to_peak_and_trigger(threshold, us_per_sample, intwidth_us, period_us);
+    synchronize_to_peak_and_trigger(peak, threshold, us_per_sample, intwidth_us, period_us);
 
     fail("unreachable");
 }
