@@ -84,6 +84,14 @@ void inline __attribute__((always_inline)) trigger() {
     }
 }
 
+#define MOMENTARY_TRIGGER_DURATION_US 100
+
+void inline __attribute__((always_inline)) triggerMomentary() {
+    digitalWrite(PIN_SSR, true);
+    delayMicroseconds(100);
+    digitalWrite(PIN_SSR, false);
+}
+
 #define MIN_BUFFER_US 5
 
 double capture_window() {
@@ -283,8 +291,12 @@ void validate_interval_width_and_period(double intwidth_samples, double intwidth
 }
 
 #define PHASE_DELAY_MULTIPLIER 0.136
+#define SOFTSTART_STANDOFF_US 500
 
-void synchronize_to_peak(int threshold, double us_per_sample, double intwidth_us, double period_us) {
+void synchronize_to_peak_and_trigger(int threshold, double us_per_sample, double intwidth_us, double period_us) {
+    // Precompute neccesary final delay
+    int needed_final_delay = ((int) ((intwidth_us / 2.) + (((double) PHASE_DELAY_MULTIPLIER) * period_us) + (((double) PHASE_DELAY_MULTIPLIER) * period_us) + (period_us / 2.))) - SOFTSTART_STANDOFF_US;
+
     int taken = 0;
 
     // Wait until we first enter the peak thresh...
@@ -320,8 +332,11 @@ void synchronize_to_peak(int threshold, double us_per_sample, double intwidth_us
         fail("sync3: taken too long");
     }
 
-    delayMicroseconds((int) ((intwidth_us / 2.) + (PHASE_DELAY_MULTIPLIER * period_us)));
-    trigger();
+    delayMicroseconds(needed_final_delay);
+    triggerMomentary();
+
+    while (1)
+        ;
 }
 
 void setup() {
@@ -340,11 +355,11 @@ void setup() {
     digitalWrite(PIN_LED, false);
 }
 
-#define HOLD_OFF_SECONDS 5
+// #define HOLD_OFF_SECONDS 5
 
 void loop() {
-    // 10 second hold off, during which AC must be present
-    hold_until_nonnull(HOLD_OFF_SECONDS * 1000);
+    // // `HOLD_OFF_SECONDS` second hold off, during which AC must be present
+    // hold_until_nonnull(HOLD_OFF_SECONDS * 1000);
 
     double us_per_sample = capture_window();
 
@@ -383,7 +398,7 @@ void loop() {
     Serial.println();
 
     validate_interval_width_and_period(mean_width, intwidth_us, period_us);
-    synchronize_to_peak(threshold, us_per_sample, intwidth_us, period_us);
+    synchronize_to_peak_and_trigger(threshold, us_per_sample, intwidth_us, period_us);
 
     fail("unreachable");
 }
